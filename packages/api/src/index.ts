@@ -1,1 +1,3 @@
-export type AppRouter = Record<string, never>;
+export { appRouter, createCaller } from "./root";
+export type { AppRouter } from "./root";
+export type { Context } from "./trpc";

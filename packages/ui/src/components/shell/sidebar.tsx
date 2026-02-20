@@ -2,7 +2,7 @@ import { Images, FolderOpen } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 const navItems = [
-  { label: "Library", icon: Images, href: "/" },
+  { label: "Library", icon: Images, href: "/library" },
   { label: "Collections", icon: FolderOpen, href: "/collections" },
 ] as const;
 

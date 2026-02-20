@@ -7,6 +7,7 @@ interface AppShellProps {
   pageTitle?: string;
   children: React.ReactNode;
   className?: string;
+  userButton?: React.ReactNode;
 }
 
 export function AppShell({
@@ -14,12 +15,13 @@ export function AppShell({
   pageTitle,
   children,
   className,
+  userButton,
 }: AppShellProps) {
   return (
     <div className="flex h-screen bg-background text-foreground">
       <Sidebar activePath={activePath} />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar title={pageTitle} />
+        <Topbar title={pageTitle} userButton={userButton} />
         <main className={cn("flex-1 overflow-auto p-6", className)}>
           {children}
         </main>

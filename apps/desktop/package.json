@@ -9,9 +9,16 @@
     "package": "electron-forge package"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.1",
+    "@clerk/themes": "^2.4.55",
+    "@synthesis/api": "workspace:^",
     "@synthesis/ui": "workspace:*",
+    "@tanstack/react-query": "^5",
+    "@trpc/client": "^11",
+    "@trpc/react-query": "^11",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "superjson": "^2.2.2"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.6.0",

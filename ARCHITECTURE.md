@@ -281,6 +281,25 @@ Add Clerk to the web app and Electron app. Implement sign-up, sign-in, and prote
 
 **Verify:** Can sign up on web, see the authenticated app shell. Can sign in from Electron, same flow. Unauthenticated users get redirected to login.
 
+### Phase 3.5 — Electron Production Auth (Browser-Redirect Flow)
+
+Replace the embedded Clerk `<SignIn />` in Electron with a browser-redirect flow for production use. The embedded component works in dev (localhost) but breaks in production (`file://` protocol).
+
+**Flow:**
+1. Electron opens the system browser → `synthesis.app/sign-in`
+2. User signs in via Clerk on the web normally
+3. After sign-in, web app redirects to `synthesis://auth?token=...` (custom protocol)
+4. Electron registers the `synthesis://` protocol, receives the token, hydrates the Clerk session
+
+**Work involved:**
+- Register `synthesis://` custom protocol in Electron main process (`app.setAsDefaultProtocolClient`)
+- Add a web route that generates a handoff token and redirects to `synthesis://auth?token=...`
+- In Electron, handle the deep link, exchange the token for a Clerk session
+- Replace `<SignIn />` in desktop with an "Open browser to sign in" button
+- Handle edge cases: already signed in, token expiry, auth errors
+
+**Verify:** Click "Sign in" in Electron → system browser opens → sign in on web → Electron receives session → shows authenticated app shell. Works with both `file://` and packaged `.app`.
+
 ### Phase 4 — Database + tRPC
 
 Set up Prisma schema (User, Capture), connect to Neon, wire up tRPC routers in `packages/api`, mount in the web app, connect from Electron.
