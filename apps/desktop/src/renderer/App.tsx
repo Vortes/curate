@@ -2,6 +2,7 @@ import { SignedIn, SignedOut, useSignIn, UserButton } from "@clerk/clerk-react";
 import { AppShell } from "@synthesis/ui";
 import { useCallback, useEffect, useState } from "react";
 import { TRPCProvider } from "./TRPCProvider";
+import { LibraryView } from "./LibraryView";
 
 function SignInScreen() {
   const { signIn, setActive } = useSignIn();
@@ -94,9 +95,7 @@ export function App() {
             pageTitle="Library"
             userButton={<UserButton afterSignOutUrl="" />}
           >
-            <p className="text-sm text-muted-foreground">
-              Your captured UI references will appear here.
-            </p>
+            <LibraryView />
           </AppShell>
         </TRPCProvider>
       </SignedIn>

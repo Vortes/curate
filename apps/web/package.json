@@ -18,12 +18,14 @@
     "@trpc/client": "^11",
     "@trpc/react-query": "^11",
     "@trpc/server": "^11",
+    "@uploadthing/react": "^7.3.3",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
     "superjson": "^2.2.2",
-    "svix": "^1.85.0"
+    "svix": "^1.85.0",
+    "uploadthing": "^7.7.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",

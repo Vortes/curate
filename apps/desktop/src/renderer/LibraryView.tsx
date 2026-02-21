@@ -1,11 +1,9 @@
-"use client";
-
 import { useState } from "react";
 import { CaptureGrid } from "@synthesis/ui";
-import { trpc } from "@/trpc/client";
-import { UploadCaptureButton } from "@/components/upload-capture-button";
+import { Upload } from "lucide-react";
+import { trpc } from "./trpc";
 
-export default function LibraryPage() {
+export function LibraryView() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const { data: captures = [], isLoading } = trpc.capture.list.useQuery();
@@ -32,7 +30,6 @@ export default function LibraryPage() {
         <p className="text-sm text-muted-foreground">
           {captures.length} capture{captures.length !== 1 ? "s" : ""}
         </p>
-        <UploadCaptureButton />
       </div>
 
       <CaptureGrid
@@ -40,6 +37,13 @@ export default function LibraryPage() {
         onDelete={(id) => deleteCapture.mutate({ id })}
         deletingId={deletingId}
       />
+
+      {captures.length === 0 && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          <Upload className="h-4 w-4 shrink-0" />
+          <span>Use the web app to upload screenshots</span>
+        </div>
+      )}
     </div>
   );
 }
