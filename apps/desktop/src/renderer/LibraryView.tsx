@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CaptureGrid } from "@synthesis/ui";
 import { Upload } from "lucide-react";
 import { trpc } from "./trpc";
@@ -15,6 +15,14 @@ export function LibraryView() {
       utils.capture.list.invalidate();
     },
   });
+
+  // Listen for capture completion from main process
+  useEffect(() => {
+    const cleanup = window.electronAPI.onCaptureComplete(() => {
+      utils.capture.list.invalidate();
+    });
+    return cleanup;
+  }, [utils]);
 
   if (isLoading) {
     return (
@@ -41,7 +49,13 @@ export function LibraryView() {
       {captures.length === 0 && (
         <div className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           <Upload className="h-4 w-4 shrink-0" />
-          <span>Use the web app to upload screenshots</span>
+          <span>
+            Press{" "}
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono">
+              Cmd+Shift+S
+            </kbd>{" "}
+            to capture a screen region, or use the web app to upload
+          </span>
         </div>
       )}
     </div>

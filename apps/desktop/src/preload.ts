@@ -12,4 +12,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openExternal: (url: string) => {
     ipcRenderer.send("open-external", url);
   },
+  onRequestAuthToken: (callback: () => Promise<string | null>) => {
+    const listener = async () => {
+      const token = await callback();
+      ipcRenderer.send("auth:token-response", token);
+    };
+    ipcRenderer.on("auth:request-token", listener);
+    return () => {
+      ipcRenderer.removeListener("auth:request-token", listener);
+    };
+  },
+  onCaptureComplete: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("capture:complete", listener);
+    return () => {
+      ipcRenderer.removeListener("capture:complete", listener);
+    };
+  },
 });

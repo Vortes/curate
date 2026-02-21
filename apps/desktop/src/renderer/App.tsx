@@ -1,8 +1,31 @@
-import { SignedIn, SignedOut, useSignIn, UserButton } from "@clerk/clerk-react";
+import {
+  SignedIn,
+  SignedOut,
+  useAuth,
+  useSignIn,
+  UserButton,
+} from "@clerk/clerk-react";
 import { AppShell } from "@synthesis/ui";
 import { useCallback, useEffect, useState } from "react";
 import { TRPCProvider } from "./TRPCProvider";
 import { LibraryView } from "./LibraryView";
+
+function AuthTokenProvider({ children }: { children: React.ReactNode }) {
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    const cleanup = window.electronAPI.onRequestAuthToken(async () => {
+      try {
+        return await getToken();
+      } catch {
+        return null;
+      }
+    });
+    return cleanup;
+  }, [getToken]);
+
+  return <>{children}</>;
+}
 
 function SignInScreen() {
   const { signIn, setActive } = useSignIn();
@@ -89,15 +112,17 @@ export function App() {
       </SignedOut>
 
       <SignedIn>
-        <TRPCProvider>
-          <AppShell
-            activePath="/library"
-            pageTitle="Library"
-            userButton={<UserButton afterSignOutUrl="" />}
-          >
-            <LibraryView />
-          </AppShell>
-        </TRPCProvider>
+        <AuthTokenProvider>
+          <TRPCProvider>
+            <AppShell
+              activePath="/library"
+              pageTitle="Library"
+              userButton={<UserButton afterSignOutUrl="" />}
+            >
+              <LibraryView />
+            </AppShell>
+          </TRPCProvider>
+        </AuthTokenProvider>
       </SignedIn>
     </>
   );

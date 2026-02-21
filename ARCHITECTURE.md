@@ -322,7 +322,35 @@ Each uploaded screenshot is analyzed by GPT-4o Vision (generates a rich text des
 
 Implement the global hotkey, transparent overlay window, region selection, and automatic save-to-library flow in Electron.
 
-**Verify:** Open any app on your Mac. Press the capture hotkey. Overlay appears. Drag to select a region. Screenshot is captured, uploaded, AI-tagged, and appears in your library — all without leaving the app you were in.
+#### Global Hotkey
+
+- Default shortcut: `Cmd+Shift+S` (configurable via Preferences).
+- Registered with Electron's `globalShortcut` module.
+- When pressed, the capture overlay appears on the primary monitor.
+
+#### Capture Overlay
+
+- Transparent, full-screen `BrowserWindow` covering the **primary monitor only**.
+- Simple crosshair cursor with a dashed rectangle drawn as the user drags to select a region.
+- No screen dimming, no dimension labels — keep it minimal. (Boundary auto-detection will be added in a future phase.)
+- Pressing `Escape` dismisses the overlay without capturing.
+
+#### After Capture — Floating Thumbnail Previews (CleanShot X-style)
+
+- On capture, the screenshot is **immediately saved to the library** (uploaded via Uploadthing, AI analysis triggered in background).
+- A small floating thumbnail preview appears in the **bottom-left corner** of the screen.
+- On hover, a **"Cancel upload"** button appears (removes the capture from the library and dismisses the thumbnail).
+- Thumbnails **auto-dismiss after ~5 seconds** if not interacted with.
+- Multiple captures **stack vertically upward** from the bottom-left.
+- After **3 visible thumbnails**, older ones collapse (e.g., a "+N more" indicator or simply fade out).
+
+#### Preferences Window
+
+- Accessible from the Electron tray menu or app menu.
+- MVP setting: **capture hotkey** (rebindable).
+- Built as a standalone `BrowserWindow` with a simple form — designed to accommodate more settings in future phases.
+
+**Verify:** Open any app on your Mac. Press the capture hotkey. Overlay appears. Drag to select a region. Screenshot is captured, uploaded, AI-tagged, and appears in your library — all without leaving the app you were in. A floating thumbnail appears bottom-left and auto-dismisses after 5 seconds. Open Preferences, change the hotkey, confirm the new hotkey works.
 
 ---
 

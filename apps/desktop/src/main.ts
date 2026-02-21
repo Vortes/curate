@@ -1,10 +1,26 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  shell,
+} from "electron";
 import path from "node:path";
+import {
+  cleanupStaleTmpFiles,
+  cleanupTmpFile,
+  initCaptureManager,
+  startCapture,
+} from "./capture/captureManager";
+import { initOverlayWindow } from "./capture/overlayWindow";
+import { loadSettings, showPreferences } from "./capture/preferences";
 
 const PROTOCOL = "synthesis";
 
 let mainWindow: BrowserWindow | null = null;
 let pendingAuthToken: string | null = null;
+let currentHotkey: string | null = null;
 
 // Register deep link protocol
 if (process.defaultApp) {
@@ -59,6 +75,54 @@ app.on("open-url", (event, url) => {
   handleDeepLink(url);
 });
 
+function registerHotkey(hotkey: string) {
+  if (currentHotkey) {
+    globalShortcut.unregister(currentHotkey);
+  }
+  try {
+    globalShortcut.register(hotkey, () => {
+      startCapture();
+    });
+    currentHotkey = hotkey;
+  } catch (err) {
+    console.error(`[hotkey] Failed to register "${hotkey}":`, err);
+  }
+}
+
+function buildAppMenu() {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        {
+          label: "Preferences...",
+          accelerator: "CmdOrCtrl+,",
+          click: () => {
+            showPreferences((newHotkey) => {
+              registerHotkey(newHotkey);
+            });
+          },
+        },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -86,6 +150,9 @@ function createWindow() {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  // Initialize capture system
+  initCaptureManager(mainWindow);
 }
 
 // IPC: open external URL (only allow https)
@@ -97,7 +164,18 @@ ipcMain.on("open-external", (_event, url: string) => {
   }
 });
 
-app.on("ready", createWindow);
+app.on("ready", () => {
+  cleanupStaleTmpFiles();
+  buildAppMenu();
+  createWindow();
+
+  // Create persistent overlay window (invisible, click-through until activated)
+  initOverlayWindow();
+
+  // Register global capture hotkey
+  const settings = loadSettings();
+  registerHotkey(settings.hotkey);
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
@@ -109,4 +187,9 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+  cleanupTmpFile();
 });

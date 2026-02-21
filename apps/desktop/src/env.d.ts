@@ -12,6 +12,10 @@ interface ImportMeta {
 interface ElectronAPI {
   onAuthToken: (callback: (token: string) => void) => () => void;
   openExternal: (url: string) => void;
+  onRequestAuthToken: (
+    callback: () => Promise<string | null>
+  ) => () => void;
+  onCaptureComplete: (callback: () => void) => () => void;
 }
 
 interface Window {
