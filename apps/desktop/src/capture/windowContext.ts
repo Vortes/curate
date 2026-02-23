@@ -119,17 +119,21 @@ export async function resolveWindowContext(
 
       console.log("[windowContext] sourceUrl result:", sourceUrl);
 
-      // For browsers, use the window title (page title) instead of the
-      // browser app name. Some browsers append their name to the title
-      // (e.g. "Page Title - Google Chrome"), others don't (e.g. Zen just
-      // shows "Page Title"). Strip common suffixes if present.
+      // For browsers with a resolved URL, derive sourceApp from the domain.
+      // Takes the second-to-last part as the product name — this is the
+      // registrable domain name and works for virtually all SaaS products:
+      //   x.com → x, console.neon.tech → neon, app.linear.app → linear,
+      //   www.figma.com → figma, mail.google.com → google
       let sourceApp = appName;
-      if (isBrowser(appName) && windowInfo.windowTitle) {
-        const cleaned = windowInfo.windowTitle
-          .replace(/\s*[—–\-|]\s*(Zen Browser|Zen|Firefox|Google Chrome|Chrome|Brave Browser|Microsoft Edge|Arc|Safari|Waterfox|LibreWolf)\s*$/i, "")
-          .trim();
-        if (cleaned.length > 0) {
-          sourceApp = cleaned;
+      if (isBrowser(appName) && sourceUrl) {
+        try {
+          const hostname = new URL(sourceUrl).hostname;
+          const parts = hostname.split(".");
+          if (parts.length >= 2) {
+            sourceApp = parts[parts.length - 2]!;
+          }
+        } catch {
+          // URL parsing failed — keep appName
         }
       }
 
