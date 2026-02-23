@@ -21,7 +21,6 @@ const BROWSER_SCRIPTS: Record<string, string> = {
 };
 
 // Lowercase process names for Firefox-based browsers.
-// Matching is done case-insensitively against the incoming appName.
 const FIREFOX_BASED_NAMES = new Set([
   "firefox",
   "zen",
@@ -29,51 +28,33 @@ const FIREFOX_BASED_NAMES = new Set([
   "librewolf",
 ]);
 
-// AppleScript for Firefox-based browsers uses the Accessibility API to read
-// the URL bar combo box.  Two fallback paths cover different UI layouts.
-// NOTE: The appName embedded here comes only from FIREFOX_BASED_NAMES, never
-// from raw user input, so template-literal interpolation is safe.
-function buildFirefoxScript(resolvedAppName: string): string {
-  // Try multiple accessibility paths since the UI hierarchy can vary between
-  // Firefox forks and versions. The "Navigation" toolbar description is the
-  // most reliable anchor.
-  return `tell application "System Events"
-    tell application process "${resolvedAppName}"
-        try
-            return value of combo box 1 of group 1 of (first toolbar of group 1 of window 1 whose description is "Navigation")
-        on error
-            try
-                return value of combo box 1 of group 1 of toolbar 1 of group 1 of window 1
-            on error
-                return ""
-            end try
-        end try
-    end tell
-end tell`;
-}
+// Map from lowercase process name to Application Support directory name
+const FIREFOX_PROFILE_DIRS: Record<string, string> = {
+  firefox: "Firefox",
+  zen: "zen",
+  waterfox: "Waterfox",
+  librewolf: "LibreWolf",
+};
 
 function runOsascript(script: string): Promise<string | null> {
   return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      console.log("[browserUrl] osascript timed out");
-      resolve(null);
-    }, 2000);
+    const timeout = setTimeout(() => resolve(null), 2000);
 
-    // Write script to a temp file and execute it — avoids argument passing
-    // issues with multi-line scripts via execFile's -e flag.
-    const tmpFile = path.join(os.tmpdir(), `synthesis-osascript-${Date.now()}.scpt`);
+    const tmpFile = path.join(
+      os.tmpdir(),
+      `synthesis-osascript-${Date.now()}.scpt`,
+    );
     fs.writeFileSync(tmpFile, script, "utf-8");
 
-    execFile("osascript", [tmpFile], (error, stdout, stderr) => {
+    execFile("osascript", [tmpFile], (error, stdout) => {
       clearTimeout(timeout);
-      try { fs.unlinkSync(tmpFile); } catch {}
+      try {
+        fs.unlinkSync(tmpFile);
+      } catch {}
       if (error) {
-        console.log("[browserUrl] osascript error:", error.message);
-        if (stderr) console.log("[browserUrl] osascript stderr:", stderr);
         resolve(null);
         return;
       }
-      console.log("[browserUrl] osascript stdout:", JSON.stringify(stdout));
       resolve(stdout);
     });
   });
@@ -89,11 +70,131 @@ function validateUrl(raw: string): string | null {
   ) {
     return trimmed;
   }
-  // Some browsers (Zen, Firefox) show bare domains in the URL bar
-  // without the protocol. If it looks like a domain, prepend https://.
+  // Some browsers show bare domains without the protocol
   if (/^[a-zA-Z0-9][\w.-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(trimmed)) {
     return `https://${trimmed}`;
   }
+  return null;
+}
+
+// --- LZ4 block decompressor (pure Node, no dependencies) ---
+// Handles the subset of LZ4 that Firefox uses in jsonlz4 files.
+function decompressLz4Block(input: Buffer, uncompressedSize: number): Buffer {
+  const output = Buffer.alloc(uncompressedSize);
+  let ip = 0;
+  let op = 0;
+
+  while (ip < input.length) {
+    const token = input[ip++]!;
+    let literalLen = token >>> 4;
+
+    if (literalLen === 15) {
+      let b: number;
+      do {
+        b = input[ip++]!;
+        literalLen += b;
+      } while (b === 255);
+    }
+
+    input.copy(output, op, ip, ip + literalLen);
+    ip += literalLen;
+    op += literalLen;
+
+    if (ip >= input.length) break;
+
+    const offset = input[ip++]! | (input[ip++]! << 8);
+    let matchLen = (token & 0x0f) + 4;
+
+    if (matchLen === 19) {
+      let b: number;
+      do {
+        b = input[ip++]!;
+        matchLen += b;
+      } while (b === 255);
+    }
+
+    let matchPos = op - offset;
+    for (let i = 0; i < matchLen; i++) {
+      output[op++] = output[matchPos++]!;
+    }
+  }
+
+  return output;
+}
+
+/**
+ * Read the active tab URL from a Firefox/Zen session recovery file.
+ * These browsers write session state to a compressed jsonlz4 file every ~15s.
+ *
+ * jsonlz4 format: 8-byte magic ("mozLz40\0") + 4-byte LE size + lz4 block data
+ */
+function getFirefoxSessionUrl(browserName: string): string | null {
+  const appDir = FIREFOX_PROFILE_DIRS[browserName];
+  if (!appDir) return null;
+
+  const profilesDir = path.join(
+    os.homedir(),
+    "Library",
+    "Application Support",
+    appDir,
+    "Profiles",
+  );
+
+  let profiles: string[];
+  try {
+    profiles = fs.readdirSync(profilesDir);
+  } catch {
+    return null;
+  }
+
+  for (const profile of profiles) {
+    const recoveryPath = path.join(
+      profilesDir,
+      profile,
+      "sessionstore-backups",
+      "recovery.jsonlz4",
+    );
+
+    try {
+      if (!fs.existsSync(recoveryPath)) continue;
+
+      const buf = fs.readFileSync(recoveryPath);
+      const magic = buf.slice(0, 8).toString();
+      if (!magic.startsWith("mozLz40")) continue;
+
+      const uncompressedSize = buf.readUInt32LE(8);
+      const compressed = buf.slice(12);
+      const decompressed = decompressLz4Block(compressed, uncompressedSize);
+      const session = JSON.parse(decompressed.toString("utf-8"));
+
+      const windows = session.windows;
+      if (!windows?.length) continue;
+
+      const selWinIdx = Math.max(
+        0,
+        Math.min((session.selectedWindow || 1) - 1, windows.length - 1),
+      );
+      const win = windows[selWinIdx];
+      const tabs = win.tabs;
+      if (!tabs?.length) continue;
+
+      const selTabIdx = Math.max(
+        0,
+        Math.min((win.selected || 1) - 1, tabs.length - 1),
+      );
+      const tab = tabs[selTabIdx];
+      const entries = tab.entries;
+      if (!entries?.length) continue;
+
+      const url = entries[entries.length - 1].url;
+      if (url && typeof url === "string") {
+        return url;
+      }
+    } catch {
+      continue;
+    }
+  }
+
   return null;
 }
 
@@ -105,8 +206,10 @@ export function isBrowser(appName: string): boolean {
   );
 }
 
-export async function getBrowserUrl(appName: string): Promise<string | null> {
-  // 1. Check Chromium-based / Safari browsers via direct AppleScript.
+export async function getBrowserUrl(
+  appName: string,
+): Promise<string | null> {
+  // 1. Chromium-based / Safari — use native AppleScript (reliable)
   const chromiumScript = BROWSER_SCRIPTS[appName];
   if (chromiumScript !== undefined) {
     const raw = await runOsascript(chromiumScript);
@@ -114,23 +217,16 @@ export async function getBrowserUrl(appName: string): Promise<string | null> {
     return validateUrl(raw);
   }
 
-  // 2. Check Firefox-based browsers via Accessibility API AppleScript.
-  //    System Events uses the actual process name which is typically lowercase
-  //    (e.g. "zen"), while CGWindowList may return a capitalized display name
-  //    (e.g. "Zen"). Try lowercase first, then original casing as fallback.
+  // 2. Firefox-based browsers — read session recovery file (reliable,
+  //    may be up to ~15s stale). The Accessibility API approach doesn't
+  //    work from Electron's process context, so we skip it entirely.
   if (FIREFOX_BASED_NAMES.has(appName.toLowerCase())) {
-    const lowered = appName.toLowerCase();
-    const script = buildFirefoxScript(lowered);
-    const raw = await runOsascript(script);
-    if (raw !== null) {
-      const url = validateUrl(raw);
-      if (url) return url;
+    const url = getFirefoxSessionUrl(appName.toLowerCase());
+    if (url) {
+      console.log("[browserUrl] Got URL from session file:", url);
+      return validateUrl(url) ?? url;
     }
-    // Fallback: try original casing in case the process name is capitalized
-    if (lowered !== appName) {
-      const fallbackRaw = await runOsascript(buildFirefoxScript(appName));
-      if (fallbackRaw !== null) return validateUrl(fallbackRaw);
-    }
+    console.log("[browserUrl] Session file fallback failed for", appName);
     return null;
   }
 

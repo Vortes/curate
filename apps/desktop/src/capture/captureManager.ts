@@ -58,6 +58,11 @@ export function initCaptureManager(win: BrowserWindow) {
       rect: { x: number; y: number; width: number; height: number }
     ) => {
       deactivateOverlay();
+      // Small delay to let the window manager fully process the overlay
+      // dismissal before we try to read the browser's accessibility tree.
+      // Without this, Firefox-based browsers (Zen, etc.) return an empty
+      // URL bar value because they haven't regained focus yet.
+      await new Promise((r) => setTimeout(r, 100));
       await handleRegionSelected(rect);
     }
   );

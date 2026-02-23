@@ -10,10 +10,24 @@ export interface WindowContext {
 
 const NULL_CONTEXT: WindowContext = { sourceApp: null, sourceUrl: null };
 
+/** Handle bare domains (e.g. "console.neon.tech") that lack a protocol prefix. */
+function validateBareUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("file://")) {
+    return trimmed;
+  }
+  if (/^[a-zA-Z0-9][\w.-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+  return null;
+}
+
 interface SwiftWindowInfo {
   appName: string | null;
   bundleId: string | null;
   windowTitle: string | null;
+  browserUrl?: string | null;
 }
 
 function getSwiftBinaryPath(): string {
@@ -69,8 +83,13 @@ export async function resolveWindowContext(
         return NULL_CONTEXT;
       }
 
-      const sourceUrl = await getBrowserUrl(appName);
-      console.log("[windowContext] getBrowserUrl result:", sourceUrl);
+      // For Firefox-based browsers, the Swift binary reads the URL bar
+      // directly via the Accessibility API (osascript can't do this from
+      // Electron's process context). For Chromium/Safari, use AppleScript.
+      const sourceUrl = windowInfo.browserUrl
+        ? validateBareUrl(windowInfo.browserUrl)
+        : await getBrowserUrl(appName);
+      console.log("[windowContext] sourceUrl result:", sourceUrl);
 
       // For browsers, use the window title (page title) instead of the
       // browser app name. Some browsers append their name to the title
