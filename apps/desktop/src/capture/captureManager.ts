@@ -12,6 +12,7 @@ import {
 import { uploadCapture } from "./uploader";
 import { showThumbnail } from "./thumbnailManager";
 import { resolveWindowContext } from "./windowContext";
+import { loadPersistedToken } from "../auth/tokenStorage";
 
 let mainWindow: BrowserWindow | null = null;
 let capturedScreenshot: Electron.NativeImage | null = null;
@@ -76,32 +77,6 @@ export function initCaptureManager(win: BrowserWindow) {
     capturedScreenshot = null;
     isCaptureInProgress = false;
     cleanupTmpFile();
-  });
-
-  ipcMain.on("auth:token-response", (_event, token: string | null) => {
-    pendingTokenResolve?.(token);
-    pendingTokenResolve = null;
-  });
-}
-
-let pendingTokenResolve: ((token: string | null) => void) | null = null;
-
-function requestAuthToken(): Promise<string | null> {
-  return new Promise((resolve) => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      resolve(null);
-      return;
-    }
-    pendingTokenResolve = resolve;
-    mainWindow.webContents.send("auth:request-token");
-
-    // Timeout after 10s
-    setTimeout(() => {
-      if (pendingTokenResolve) {
-        pendingTokenResolve(null);
-        pendingTokenResolve = null;
-      }
-    }, 10000);
   });
 }
 
@@ -186,7 +161,7 @@ async function handleRegionSelected(rect: {
 
     const [context, token] = await Promise.all([
       resolveWindowContext(rect),
-      requestAuthToken(),
+      Promise.resolve(loadPersistedToken("access")),
     ]);
 
     if (!token) {

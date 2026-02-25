@@ -3,3 +3,7 @@ swift-helpers/window-info
 
 # Native addon build artifacts
 native/build/
+
+# env
+.env
+.env.production

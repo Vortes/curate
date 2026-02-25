@@ -1,6 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  // ── Auth ────────────────────────────────────────────────────────────
+  /** Open system browser to Clerk sign-in (RFC 8252 flow) */
+  signIn: () => ipcRenderer.send("auth:sign-in"),
+
+  /** Clear persisted JWT and sign out */
+  signOut: () => ipcRenderer.send("auth:sign-out"),
+
+  /** Get the current persisted JWT (null if signed out) */
+  getToken: (): Promise<string | null> => ipcRenderer.invoke("auth:get-token"),
+
+  /** Listen for fresh JWT delivered after deep-link ticket exchange */
   onAuthToken: (callback: (token: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, token: string) =>
       callback(token);
@@ -9,19 +20,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("auth:token", listener);
     };
   },
+
+  // ── General ─────────────────────────────────────────────────────────
   openExternal: (url: string) => {
     ipcRenderer.send("open-external", url);
   },
-  onRequestAuthToken: (callback: () => Promise<string | null>) => {
-    const listener = async () => {
-      const token = await callback();
-      ipcRenderer.send("auth:token-response", token);
-    };
-    ipcRenderer.on("auth:request-token", listener);
-    return () => {
-      ipcRenderer.removeListener("auth:request-token", listener);
-    };
-  },
+
   onCaptureComplete: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("capture:complete", listener);

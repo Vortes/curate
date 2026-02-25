@@ -43,7 +43,7 @@ interface SwiftWindowInfo {
 
 function getSwiftBinaryPath(): string {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "swift-helpers/window-info");
+    return path.join(process.resourcesPath, "window-info");
   }
   return path.join(app.getAppPath(), "swift-helpers/window-info");
 }

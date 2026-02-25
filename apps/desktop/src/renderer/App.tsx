@@ -1,63 +1,17 @@
-import {
-  SignedIn,
-  SignedOut,
-  useAuth,
-  useSignIn,
-  UserButton,
-} from "@clerk/clerk-react";
 import { AppShell } from "@curate/ui";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useAuth } from "./AuthProvider";
 import { TRPCProvider } from "./TRPCProvider";
 import { LibraryView } from "./LibraryView";
 
-function AuthTokenProvider({ children }: { children: React.ReactNode }) {
-  const { getToken } = useAuth();
-
-  useEffect(() => {
-    const cleanup = window.electronAPI.onRequestAuthToken(async () => {
-      try {
-        return await getToken();
-      } catch {
-        return null;
-      }
-    });
-    return cleanup;
-  }, [getToken]);
-
-  return <>{children}</>;
-}
-
 function SignInScreen() {
-  const { signIn, setActive } = useSignIn();
-  const [status, setStatus] = useState<"idle" | "waiting" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
+  const { signIn } = useAuth();
+  const [status, setStatus] = useState<"idle" | "waiting">("idle");
 
   const handleSignIn = useCallback(() => {
-    const webUrl = import.meta.env.VITE_WEB_URL || "http://localhost:3000";
-    window.electronAPI.openExternal(
-      `${webUrl}/sign-in?redirect_url=/desktop-callback`
-    );
+    signIn();
     setStatus("waiting");
-  }, []);
-
-  useEffect(() => {
-    const cleanup = window.electronAPI.onAuthToken(async (token) => {
-      try {
-        if (!signIn || !setActive) return;
-        const result = await signIn.create({
-          strategy: "ticket",
-          ticket: token,
-        });
-        if (result.createdSessionId) {
-          await setActive({ session: result.createdSessionId });
-        }
-      } catch (err) {
-        setStatus("error");
-        setErrorMsg(err instanceof Error ? err.message : "Sign-in failed");
-      }
-    });
-    return cleanup;
-  }, [signIn, setActive]);
+  }, [signIn]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
@@ -85,41 +39,30 @@ function SignInScreen() {
           </p>
         </div>
       )}
-
-      {status === "error" && (
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-sm text-destructive">{errorMsg}</p>
-          <button
-            onClick={() => {
-              setStatus("idle");
-              setErrorMsg("");
-            }}
-            className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90"
-          >
-            Try again
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 
 export function App() {
-  return (
-    <>
-      <SignedOut>
-        <SignInScreen />
-      </SignedOut>
+  const { isLoading, isSignedIn } = useAuth();
 
-      <SignedIn>
-        <AuthTokenProvider>
-          <TRPCProvider>
-            <AppShell activePath="/library" platform="desktop">
-              <LibraryView />
-            </AppShell>
-          </TRPCProvider>
-        </AuthTokenProvider>
-      </SignedIn>
-    </>
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-ink-whisper border-t-orange" />
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return <SignInScreen />;
+  }
+
+  return (
+    <TRPCProvider>
+      <AppShell activePath="/library" platform="desktop">
+        <LibraryView />
+      </AppShell>
+    </TRPCProvider>
   );
 }

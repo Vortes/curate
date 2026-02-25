@@ -12,8 +12,6 @@
     "package": "electron-forge package"
   },
   "dependencies": {
-    "@clerk/clerk-react": "^5.61.1",
-    "@clerk/themes": "^2.4.55",
     "@curate/api": "workspace:^",
     "@curate/styles": "workspace:*",
     "@curate/ui": "workspace:*",
@@ -26,13 +24,17 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.6.0",
+    "@electron-forge/maker-dmg": "^7.11.1",
     "@electron-forge/maker-zip": "^7.6.0",
     "@electron-forge/plugin-vite": "^7.6.0",
+    "@electron/notarize": "^3.1.1",
+    "@electron/osx-sign": "^2.3.0",
     "@electron/rebuild": "^4.0.3",
     "@tailwindcss/vite": "^4.2.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "dotenv": "^17.3.1",
     "electron": "^34.1.1",
     "node-addon-api": "^8.5.0",
     "node-gyp": "^12.2.0",

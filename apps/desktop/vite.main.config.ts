@@ -1,9 +1,12 @@
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   define: {
     "process.env.VITE_WEB_URL": JSON.stringify(
-      process.env.VITE_WEB_URL || "http://localhost:3000"
+      mode === "production" ? "https://www.curate.is" : "http://localhost:3000"
+    ),
+    "process.env.CLERK_OAUTH_CLIENT_ID": JSON.stringify(
+      process.env.CLERK_OAUTH_CLIENT_ID ?? ""
     ),
   },
   build: {
@@ -11,4 +14,4 @@ export default defineConfig({
       external: [/\.node$/],
     },
   },
-});
+}));
