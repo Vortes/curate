@@ -1,7 +1,7 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@curate/api";
 import { db } from "@curate/db";
-import { auth } from "@clerk/nextjs/server";
+import { resolveUserId } from "../../../../lib/resolveUserId";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +15,7 @@ const handler = (req: Request) =>
     req,
     router: appRouter,
     createContext: async () => {
-      const { userId } = await auth();
+      const userId = await resolveUserId(req);
       return { db, userId };
     },
     responseMeta: () => ({ headers: corsHeaders }),

@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { UTApi } from "uploadthing/server";
+import { resolveUserId } from "../../../../lib/resolveUserId";
 import { db } from "@curate/db";
 import { analyzeCapture } from "@curate/api";
 
@@ -15,7 +15,7 @@ export async function OPTIONS() {
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await auth();
+    const userId = await resolveUserId(req);
     if (!userId) {
       return Response.json(
         { error: "Unauthorized" },
