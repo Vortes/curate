@@ -41,24 +41,12 @@ export async function POST(req: Request) {
     const eventType = evt.type;
     console.log("Clerk webhook received:", eventType);
 
-    if (eventType === "user.created" || eventType === "user.updated") {
-      const { id, email_addresses, first_name, last_name } = evt.data;
-      const primaryEmail = email_addresses?.[0]?.email_address;
-
-      if (!id || !primaryEmail) {
-        console.error("Clerk webhook: missing user ID or email");
-        return new Response("Missing user ID or email", { status: 400 });
+    if (eventType === "user.deleted") {
+      const { id } = evt.data;
+      if (id) {
+        await db.user.deleteMany({ where: { clerkId: id } });
+        console.log("Clerk webhook: deleted user", id);
       }
-
-      const name = [first_name, last_name].filter(Boolean).join(" ") || null;
-
-      await db.user.upsert({
-        where: { clerkId: id },
-        create: { clerkId: id, email: primaryEmail, name },
-        update: { email: primaryEmail, name },
-      });
-
-      console.log("Clerk webhook: upserted user", id, primaryEmail);
     }
 
     return new Response("", { status: 200 });
