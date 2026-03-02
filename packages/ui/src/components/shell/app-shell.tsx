@@ -57,7 +57,7 @@ export function AppShell({
 			/>
 			<main
 				className={cn(
-					"flex-1 flex flex-col bg-surface overflow-hidden",
+					"flex-1 flex flex-col bg-surface overflow-hidden relative",
 					className,
 				)}
 			>

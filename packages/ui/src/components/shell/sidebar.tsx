@@ -1,8 +1,9 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { LayoutGrid, Activity, Globe, Settings, LogOut, Loader2 } from "lucide-react"
+import { useState } from "react"
+import { LayoutGrid, Settings, LogOut, Loader2, Plus } from "lucide-react"
 import { cn } from "../../lib/utils"
+import { NewCollectionModal } from "../collections/new-collection-modal"
 
 interface CollectionItem {
 	id: string
@@ -28,8 +29,6 @@ interface SidebarProps {
 
 const navItems = [
 	{ label: "Library", icon: LayoutGrid, href: "/library", count: 247 },
-	{ label: "Flows", icon: Activity, href: "/flows", count: 12 },
-	{ label: "Sources", icon: Globe, href: "/sources", count: 38 },
 ] as const
 
 export function Sidebar({
@@ -45,45 +44,7 @@ export function Sidebar({
 	onNavClick,
 }: SidebarProps) {
 	const isDesktop = platform === "desktop"
-	const [isCreating, setIsCreating] = useState(false)
-	const [inputValue, setInputValue] = useState("")
-	const inputRef = useRef<HTMLInputElement>(null)
-
-	function handleNewClick() {
-		setIsCreating(true)
-		// Focus after render
-		setTimeout(() => inputRef.current?.focus(), 0)
-	}
-
-	function handleCancel() {
-		setIsCreating(false)
-		setInputValue("")
-	}
-
-	async function handleSubmit() {
-		const name = inputValue.trim()
-		if (!name || !onCreateCollection) {
-			handleCancel()
-			return
-		}
-		try {
-			await onCreateCollection(name)
-			setIsCreating(false)
-			setInputValue("")
-		} catch {
-			// Error is set via createError prop from parent — keep input open
-			inputRef.current?.focus()
-		}
-	}
-
-	function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-		if (e.key === "Enter") {
-			e.preventDefault()
-			void handleSubmit()
-		} else if (e.key === "Escape") {
-			handleCancel()
-		}
-	}
+	const [isNewModalOpen, setIsNewModalOpen] = useState(false)
 
 	return (
 		<aside
@@ -97,9 +58,7 @@ export function Sidebar({
 			<div className="absolute right-0 top-0 bottom-0 w-px bg-transparent shadow-sculpted-v" />
 
 			{/* macOS traffic light clearance + drag region (desktop only) */}
-			{isDesktop && (
-				<div className="h-[52px] shrink-0 drag-region" />
-			)}
+			{isDesktop && <div className="h-[52px] shrink-0 drag-region" />}
 
 			{/* Brand area */}
 			<div className="px-6 mb-8 flex items-center gap-2">
@@ -117,7 +76,14 @@ export function Sidebar({
 						<a
 							key={item.href}
 							href={onNavClick ? undefined : item.href}
-							onClick={onNavClick ? (e) => { e.preventDefault(); onNavClick(item.href) } : undefined}
+							onClick={
+								onNavClick
+									? (e) => {
+											e.preventDefault()
+											onNavClick(item.href)
+										}
+									: undefined
+							}
 							className={cn(
 								"flex items-center gap-2.5 px-6 py-2 text-[13.5px] font-normal cursor-pointer transition-all duration-200 relative",
 								isActive
@@ -148,8 +114,19 @@ export function Sidebar({
 
 			{/* Collections section */}
 			<div className="flex-1 overflow-y-auto">
-				<div className="font-mono text-[10px] font-normal uppercase tracking-[0.1em] text-ink-whisper px-6 mb-2">
-					Collections
+				<div className="flex items-center justify-between px-6 mb-2">
+					<div className="font-mono text-[10px] font-normal uppercase tracking-[0.1em] text-ink-whisper">
+						Collections
+					</div>
+					{onCreateCollection && (
+						<button
+							onClick={() => setIsNewModalOpen(true)}
+							className="text-ink-quiet text-[10px] hover:text-ink flex items-center gap-1 font-medium transition-colors cursor-pointer"
+						>
+							<Plus className="w-3 h-3" />
+							New
+						</button>
+					)}
 				</div>
 
 				{isLoadingCollections ? (
@@ -173,7 +150,14 @@ export function Sidebar({
 							<a
 								key={item.id}
 								href={onNavClick ? undefined : item.href}
-								onClick={onNavClick ? (e) => { e.preventDefault(); onNavClick(item.href) } : undefined}
+								onClick={
+									onNavClick
+										? (e) => {
+												e.preventDefault()
+												onNavClick(item.href)
+											}
+										: undefined
+								}
 								title={item.name}
 								className={cn(
 									"flex items-center gap-2.5 px-6 py-2 text-[13.5px] font-normal cursor-pointer transition-all duration-200 relative",
@@ -198,38 +182,20 @@ export function Sidebar({
 					})
 				)}
 
-				{/* Inline create flow */}
+				{/* New Collection Modal */}
 				{onCreateCollection && (
-					<div className="mt-1">
-						{isCreating ? (
-							<div className="px-6">
-								<input
-									ref={inputRef}
-									type="text"
-									value={inputValue}
-									onChange={(e) => setInputValue(e.target.value)}
-									onKeyDown={handleKeyDown}
-									onBlur={handleCancel}
-									placeholder="Collection name"
-									className={cn(
-										"w-full text-[13.5px] border rounded px-2 py-1 bg-surface text-ink outline-none",
-										createError ? "border-red-400" : "border-edge",
-									)}
-								/>
-								{createError && (
-									<p className="text-red-400 text-[11px] mt-1">{createError}</p>
-								)}
-							</div>
-						) : (
-							<button
-								type="button"
-								onClick={handleNewClick}
-								className="text-ink-quiet text-[12px] px-6 py-1.5 cursor-pointer hover:text-ink-mid w-full text-left"
-							>
-								+ New
-							</button>
-						)}
-					</div>
+					<NewCollectionModal
+						open={isNewModalOpen}
+						onClose={() => setIsNewModalOpen(false)}
+						onCreate={async (name) => {
+							try {
+								await onCreateCollection(name)
+								setIsNewModalOpen(false)
+							} catch {
+								// Keep open on error
+							}
+						}}
+					/>
 				)}
 			</div>
 

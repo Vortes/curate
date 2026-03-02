@@ -14,6 +14,7 @@ interface CollectionHeaderProps {
 
 export function CollectionHeader({
   name,
+  description,
   captureCount,
   onEdit,
   onOrganize,
@@ -86,6 +87,11 @@ export function CollectionHeader({
           )}
         </div>
       </div>
+
+      {/* Description */}
+      {description && (
+        <p className="text-[13px] text-ink-quiet mt-1">{description}</p>
+      )}
 
       {/* Capture count */}
       <p className="font-mono text-[11px] font-light tracking-[0.06em] text-ink-whisper mt-1">

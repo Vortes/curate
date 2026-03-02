@@ -7,46 +7,6 @@ import { SearchGateway, CaptureGrid, CaptureDetailModal, OrganizeModeProvider, u
 import type { CaptureCardData, CaptureGroup, CollectionForOrganize } from "@curate/ui"
 import { trpc } from "@/trpc/client"
 
-function groupCapturesByDate(captures: CaptureCardData[]): CaptureGroup[] {
-	const now = new Date()
-	const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-	const yesterday = new Date(today)
-	yesterday.setDate(yesterday.getDate() - 1)
-
-	const groups: Record<string, CaptureCardData[]> = {}
-	const groupOrder: string[] = []
-
-	for (const capture of captures) {
-		const date = new Date(capture.createdAt)
-		const captureDay = new Date(
-			date.getFullYear(),
-			date.getMonth(),
-			date.getDate(),
-		)
-
-		let label: string
-		if (captureDay.getTime() === today.getTime()) {
-			label = "Today"
-		} else if (captureDay.getTime() === yesterday.getTime()) {
-			label = "Yesterday"
-		} else {
-			label = captureDay.toLocaleDateString(undefined, {
-				month: "short",
-				day: "numeric",
-				year: "numeric",
-			})
-		}
-
-		if (!groups[label]) {
-			groups[label] = []
-			groupOrder.push(label)
-		}
-		groups[label]!.push(capture)
-	}
-
-	return groupOrder.map((label) => ({ label, captures: groups[label]! }))
-}
-
 function LibraryContent() {
 	const [query, setQuery] = useState("")
 	const [activeTags, setActiveTags] = useState<string[]>([])
@@ -212,14 +172,10 @@ function LibraryContent() {
 
 	// Build groups for CaptureGrid
 	const groups: CaptureGroup[] = useMemo(() => {
-		if (isFiltering) {
-			// Flat list — single group with no label when filtering
-			return filteredCaptures.length > 0
-				? [{ label: "", captures: filteredCaptures }]
-				: []
-		}
-		return groupCapturesByDate(filteredCaptures)
-	}, [isFiltering, filteredCaptures])
+		return filteredCaptures.length > 0
+			? [{ label: "", captures: filteredCaptures }]
+			: []
+	}, [filteredCaptures])
 
 	const totalCount = captures.length
 	const filteredCount = filteredCaptures.length
