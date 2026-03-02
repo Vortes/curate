@@ -1,20 +1,29 @@
+"use client"
+
+import { useRef, useState } from "react"
 import { LayoutGrid, Activity, Globe, Settings, LogOut, Loader2 } from "lucide-react"
 import { cn } from "../../lib/utils"
 
 interface CollectionItem {
-	label: string
+	id: string
+	name: string
 	color: string
-	count: number
-	href?: string
+	captureCount: number
+	href: string
 }
 
 interface SidebarProps {
 	activePath?: string
 	className?: string
 	collections?: CollectionItem[]
+	isLoadingCollections?: boolean
+	onCreateCollection?: (name: string) => Promise<void>
+	createError?: string | null
 	platform?: "web" | "desktop"
 	onSignOut?: () => void | Promise<void>
 	isSigningOut?: boolean
+	/** When provided, nav/collection clicks call this instead of native anchor navigation (used by Electron) */
+	onNavClick?: (href: string) => void
 }
 
 const navItems = [
@@ -23,24 +32,58 @@ const navItems = [
 	{ label: "Sources", icon: Globe, href: "/sources", count: 38 },
 ] as const
 
-const defaultCollections: CollectionItem[] = [
-	{ label: "Onboarding patterns", color: "#6B8E6B", count: 34 },
-	{ label: "Navigation", color: "#7B8DAF", count: 21 },
-	{ label: "Data tables", color: "#C4956A", count: 18 },
-	{ label: "Settings pages", color: "#9B7BB5", count: 15 },
-	{ label: "Empty states", color: "#B5736B", count: 9 },
-]
-
 export function Sidebar({
 	activePath = "/",
 	className,
-	collections,
+	collections = [],
+	isLoadingCollections = false,
+	onCreateCollection,
+	createError,
 	platform = "web",
 	onSignOut,
 	isSigningOut = false,
+	onNavClick,
 }: SidebarProps) {
-	const collectionItems = collections ?? defaultCollections
 	const isDesktop = platform === "desktop"
+	const [isCreating, setIsCreating] = useState(false)
+	const [inputValue, setInputValue] = useState("")
+	const inputRef = useRef<HTMLInputElement>(null)
+
+	function handleNewClick() {
+		setIsCreating(true)
+		// Focus after render
+		setTimeout(() => inputRef.current?.focus(), 0)
+	}
+
+	function handleCancel() {
+		setIsCreating(false)
+		setInputValue("")
+	}
+
+	async function handleSubmit() {
+		const name = inputValue.trim()
+		if (!name || !onCreateCollection) {
+			handleCancel()
+			return
+		}
+		try {
+			await onCreateCollection(name)
+			setIsCreating(false)
+			setInputValue("")
+		} catch {
+			// Error is set via createError prop from parent — keep input open
+			inputRef.current?.focus()
+		}
+	}
+
+	function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+		if (e.key === "Enter") {
+			e.preventDefault()
+			void handleSubmit()
+		} else if (e.key === "Escape") {
+			handleCancel()
+		}
+	}
 
 	return (
 		<aside
@@ -73,7 +116,8 @@ export function Sidebar({
 					return (
 						<a
 							key={item.href}
-							href={item.href}
+							href={onNavClick ? undefined : item.href}
+							onClick={onNavClick ? (e) => { e.preventDefault(); onNavClick(item.href) } : undefined}
 							className={cn(
 								"flex items-center gap-2.5 px-6 py-2 text-[13.5px] font-normal cursor-pointer transition-all duration-200 relative",
 								isActive
@@ -107,34 +151,86 @@ export function Sidebar({
 				<div className="font-mono text-[10px] font-normal uppercase tracking-[0.1em] text-ink-whisper px-6 mb-2">
 					Collections
 				</div>
-				{collectionItems.map((item, index) => {
-					const href = item.href ?? "#"
-					const isActive = item.href ? activePath === item.href : false
-					return (
-						<a
-							key={index}
-							href={href}
-							className={cn(
-								"flex items-center gap-2.5 px-6 py-2 text-[13.5px] font-normal cursor-pointer transition-all duration-200 relative",
-								isActive
-									? "text-ink"
-									: "text-ink-quiet hover:text-ink-mid hover:bg-black/[0.02]",
-							)}
-						>
-							{isActive && (
-								<span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-orange rounded-r" />
-							)}
-							<span
-								className="w-2 h-2 rounded-full shrink-0"
-								style={{ background: item.color }}
+
+				{isLoadingCollections ? (
+					// Skeleton rows
+					<div className="flex flex-col gap-1 px-6">
+						{[0, 1, 2].map((i) => (
+							<div
+								key={i}
+								className="h-9 rounded animate-pulse bg-black/[0.04]"
 							/>
-							{item.label}
-							<span className="ml-auto font-mono text-[11px] text-ink-whisper font-light">
-								{item.count}
-							</span>
-						</a>
-					)
-				})}
+						))}
+					</div>
+				) : collections.length === 0 ? (
+					<div className="px-6 py-1.5 text-ink-whisper text-[12px]">
+						No collections
+					</div>
+				) : (
+					collections.map((item) => {
+						const isActive = activePath === item.href
+						return (
+							<a
+								key={item.id}
+								href={onNavClick ? undefined : item.href}
+								onClick={onNavClick ? (e) => { e.preventDefault(); onNavClick(item.href) } : undefined}
+								title={item.name}
+								className={cn(
+									"flex items-center gap-2.5 px-6 py-2 text-[13.5px] font-normal cursor-pointer transition-all duration-200 relative",
+									isActive
+										? "text-ink"
+										: "text-ink-quiet hover:text-ink-mid hover:bg-black/[0.02]",
+								)}
+							>
+								{isActive && (
+									<span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-orange rounded-r" />
+								)}
+								<span
+									className="w-2 h-2 rounded-full shrink-0"
+									style={{ background: item.color }}
+								/>
+								<span className="truncate">{item.name}</span>
+								<span className="ml-auto font-mono text-[11px] text-ink-whisper font-light shrink-0">
+									{item.captureCount}
+								</span>
+							</a>
+						)
+					})
+				)}
+
+				{/* Inline create flow */}
+				{onCreateCollection && (
+					<div className="mt-1">
+						{isCreating ? (
+							<div className="px-6">
+								<input
+									ref={inputRef}
+									type="text"
+									value={inputValue}
+									onChange={(e) => setInputValue(e.target.value)}
+									onKeyDown={handleKeyDown}
+									onBlur={handleCancel}
+									placeholder="Collection name"
+									className={cn(
+										"w-full text-[13.5px] border rounded px-2 py-1 bg-surface text-ink outline-none",
+										createError ? "border-red-400" : "border-edge",
+									)}
+								/>
+								{createError && (
+									<p className="text-red-400 text-[11px] mt-1">{createError}</p>
+								)}
+							</div>
+						) : (
+							<button
+								type="button"
+								onClick={handleNewClick}
+								className="text-ink-quiet text-[12px] px-6 py-1.5 cursor-pointer hover:text-ink-mid w-full text-left"
+							>
+								+ New
+							</button>
+						)}
+					</div>
+				)}
 			</div>
 
 			{/* Footer */}

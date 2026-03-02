@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { ImageIcon } from "lucide-react"
-import { SearchGateway, CaptureGrid, CaptureDetailModal } from "@curate/ui"
-import type { CaptureCardData, CaptureGroup } from "@curate/ui"
+import { toast } from "sonner"
+import { SearchGateway, CaptureGrid, CaptureDetailModal, OrganizeModeProvider, useOrganizeMode, FloatingActionBar, OrganizeModal } from "@curate/ui"
+import type { CaptureCardData, CaptureGroup, CollectionForOrganize } from "@curate/ui"
 import { trpc } from "@/trpc/client"
 
 function groupCapturesByDate(captures: CaptureCardData[]): CaptureGroup[] {
@@ -46,7 +47,7 @@ function groupCapturesByDate(captures: CaptureCardData[]): CaptureGroup[] {
 	return groupOrder.map((label) => ({ label, captures: groups[label]! }))
 }
 
-export default function LibraryPage() {
+function LibraryContent() {
 	const [query, setQuery] = useState("")
 	const [activeTags, setActiveTags] = useState<string[]>([])
 	const [activeApps, setActiveApps] = useState<string[]>([])
@@ -54,7 +55,57 @@ export default function LibraryPage() {
 	const [selectedCapture, setSelectedCapture] = useState<CaptureCardData | null>(null)
 	const utils = trpc.useUtils()
 
+	const { isOrganizing, selectedIds, enterOrganize, exitOrganize, toggle, clearSelection } = useOrganizeMode()
+
+	const [showOrganizeModal, setShowOrganizeModal] = useState(false)
+
 	const { data: captures = [], isLoading } = trpc.capture.list.useQuery()
+
+	// Collections for organize modal
+	const selectedIdsArray = [...selectedIds]
+	const { data: collectionsData = [] } = trpc.collection.list.useQuery()
+	const { data: captureCollections = {} } = trpc.collection.captureCollections.useQuery(
+		{ captureIds: selectedIdsArray },
+		{ enabled: showOrganizeModal && selectedIdsArray.length > 0 },
+	)
+
+	const collectionsForOrganize: CollectionForOrganize[] = collectionsData.map((c) => ({
+		id: c.id,
+		name: c.name,
+		color: c.color,
+		captureCount: c._count.captures,
+		containedCaptureIds: captureCollections[c.id] ?? [],
+	}))
+
+	const addToCollection = trpc.collection.addCaptures.useMutation({
+		onSuccess: (_, variables) => {
+			void utils.collection.list.invalidate()
+			void utils.collection.captureCollections.invalidate()
+			const collectionName = collectionsForOrganize.find((c) => c.id === variables.collectionId)?.name
+			if (collectionName) toast.success(`Added to "${collectionName}"`)
+		},
+	})
+
+	const removeFromCollection = trpc.collection.removeCaptures.useMutation({
+		onSuccess: (_, variables) => {
+			void utils.collection.list.invalidate()
+			void utils.collection.captureCollections.invalidate()
+			const collectionName = collectionsForOrganize.find((c) => c.id === variables.collectionId)?.name
+			if (collectionName) toast.success(`Removed from "${collectionName}"`)
+		},
+	})
+
+	const createCollectionForOrganize = trpc.collection.create.useMutation({
+		onSuccess: (newCollection) => {
+			void utils.collection.list.invalidate()
+			if (newCollection) {
+				addToCollection.mutate({
+					collectionId: newCollection.id,
+					captureIds: selectedIdsArray,
+				})
+			}
+		},
+	})
 
 	const deleteCapture = trpc.capture.delete.useMutation({
 		onMutate: ({ id }) => setDeletingId(id),
@@ -62,6 +113,20 @@ export default function LibraryPage() {
 			setDeletingId(null)
 			utils.capture.list.invalidate()
 		},
+	})
+
+	// Optimistic local ordering for drag-and-drop reorder
+	const [localOrder, setLocalOrder] = useState<string[] | null>(null)
+
+	// Reset local order when organize mode exits or server data changes
+	useEffect(() => {
+		if (!isOrganizing) {
+			setLocalOrder(null)
+		}
+	}, [isOrganizing])
+
+	const reorderLibrary = trpc.capture.reorderLibrary.useMutation({
+		onSuccess: () => void utils.capture.list.invalidate(),
 	})
 
 	// Full tag + app pool for autocomplete
@@ -106,9 +171,16 @@ export default function LibraryPage() {
 			.slice(0, 6)
 	}, [captures, query, activeTags])
 
+	// Apply local drag order on top of server data for optimistic reordering
+	const displayedCaptures = useMemo(() => {
+		if (!localOrder) return captures
+		const map = new Map(captures.map((c) => [c.id, c]))
+		return localOrder.map((id) => map.get(id)).filter(Boolean) as typeof captures
+	}, [captures, localOrder])
+
 	// Client-side filtering — synchronous, no spinner
 	const filteredCaptures = useMemo(() => {
-		let results = captures
+		let results = displayedCaptures
 
 		if (activeApps.length > 0) {
 			results = results.filter((c: any) => c.sourceApp && activeApps.includes(c.sourceApp))
@@ -134,7 +206,7 @@ export default function LibraryPage() {
 		}
 
 		return results
-	}, [captures, query, activeTags, activeApps])
+	}, [displayedCaptures, query, activeTags, activeApps])
 
 	const isFiltering = query.trim().length > 0 || activeTags.length > 0 || activeApps.length > 0
 
@@ -157,17 +229,40 @@ export default function LibraryPage() {
 		? `${filteredCount} of ${totalCount} captures`
 		: `${totalCount} capture${totalCount === 1 ? "" : "s"}`
 
+	async function handleBulkDelete() {
+		const ids = [...selectedIds]
+		const confirmed = window.confirm(
+			`Permanently delete ${ids.length} capture${ids.length === 1 ? "" : "s"}?`,
+		)
+		if (!confirmed) return
+
+		clearSelection()
+		for (const id of ids) {
+			await deleteCapture.mutateAsync({ id })
+		}
+		toast.success(`Deleted ${ids.length} capture${ids.length === 1 ? "" : "s"}`)
+	}
+
 	return (
 		<>
-			{/* Search gateway */}
-			<SearchGateway
-				onQueryChange={setQuery}
-				onActiveTagsChange={setActiveTags}
-				suggestedTags={suggestedTags}
-				suggestedApps={suggestedApps}
-				allTags={allTags}
-				onActiveAppsChange={setActiveApps}
-			/>
+			{/* Search gateway — hidden in organize mode */}
+			{isOrganizing ? (
+				<div className="px-10 pt-8 pb-4 text-center">
+					<p className="text-lg font-semibold text-ink">Select &amp; Rearrange</p>
+					<p className="text-[13px] text-ink-quiet mt-1">
+						Select multiple captures or drag them to rearrange
+					</p>
+				</div>
+			) : (
+				<SearchGateway
+					onQueryChange={setQuery}
+					onActiveTagsChange={setActiveTags}
+					suggestedTags={suggestedTags}
+					suggestedApps={suggestedApps}
+					allTags={allTags}
+					onActiveAppsChange={setActiveApps}
+				/>
+			)}
 
 			{/* Loading state — only for initial data fetch */}
 			{isLoading && (
@@ -179,15 +274,25 @@ export default function LibraryPage() {
 			{/* Library grid */}
 			{!isLoading && (
 				<div className="flex-1 overflow-y-auto px-10 pt-3 pb-10 scrollbar-thin">
-					{/* Count label */}
+					{/* Count label row — includes Organize button */}
 					{totalCount > 0 && (
-						<p className="font-mono text-[11px] font-light tracking-[0.06em] text-ink-whisper mb-5">
-							{countLabel}
-						</p>
+						<div className="flex items-center justify-between mb-5">
+							<p className="font-mono text-[11px] font-light tracking-[0.06em] text-ink-whisper">
+								{isOrganizing ? `${selectedIds.size} selected` : countLabel}
+							</p>
+							{!isOrganizing && (
+								<button
+									onClick={enterOrganize}
+									className="text-[13px] text-ink-quiet hover:text-ink-mid cursor-pointer transition-colors px-3 py-1 rounded-md hover:bg-black/[0.03] border-0 bg-transparent"
+								>
+									Organize
+								</button>
+							)}
+						</div>
 					)}
 
 					{/* No matches state — filtering returned nothing but captures exist */}
-					{isFiltering && filteredCount === 0 && totalCount > 0 ? (
+					{!isOrganizing && isFiltering && filteredCount === 0 && totalCount > 0 ? (
 						<div className="flex flex-col items-center justify-center gap-3 py-20 text-ink-quiet">
 							<ImageIcon className="h-10 w-10" />
 							<p className="text-sm">No matches</p>
@@ -195,13 +300,49 @@ export default function LibraryPage() {
 					) : (
 						<CaptureGrid
 							groups={groups}
-							onDelete={(id) => deleteCapture.mutate({ id })}
+							onDelete={isOrganizing ? undefined : (id) => deleteCapture.mutate({ id })}
 							deletingId={deletingId}
-							onCardClick={setSelectedCapture}
+							onCardClick={isOrganizing ? undefined : setSelectedCapture}
+							isOrganizing={isOrganizing}
+							selectedIds={selectedIds}
+							onSelect={toggle}
+							onReorder={(orderedIds) => {
+								setLocalOrder(orderedIds)
+								reorderLibrary.mutate({ orderedCaptureIds: orderedIds })
+							}}
 						/>
 					)}
 				</div>
 			)}
+
+			{/* Floating action bar — only in organize mode */}
+			{isOrganizing && (
+				<FloatingActionBar
+					selectedCount={selectedIds.size}
+					onOrganize={() => setShowOrganizeModal(true)}
+					onRemove={handleBulkDelete}
+					onDone={exitOrganize}
+					removeLabel="Delete"
+					isDestructiveRemove={true}
+				/>
+			)}
+
+			<OrganizeModal
+				open={showOrganizeModal}
+				onClose={() => setShowOrganizeModal(false)}
+				selectedCaptureIds={selectedIdsArray}
+				collections={collectionsForOrganize}
+				onAddToCollection={(collectionId, captureIds) =>
+					addToCollection.mutate({ collectionId, captureIds })
+				}
+				onRemoveFromCollection={(collectionId, captureIds) =>
+					removeFromCollection.mutate({ collectionId, captureIds })
+				}
+				onCreateCollection={async (name) => {
+					await createCollectionForOrganize.mutateAsync({ name })
+				}}
+				isCreating={createCollectionForOrganize.isPending}
+			/>
 
 			<CaptureDetailModal
 				capture={selectedCapture}
@@ -212,5 +353,13 @@ export default function LibraryPage() {
 				}}
 			/>
 		</>
+	)
+}
+
+export default function LibraryPage() {
+	return (
+		<OrganizeModeProvider context={{ type: "library" }}>
+			<LibraryContent />
+		</OrganizeModeProvider>
 	)
 }

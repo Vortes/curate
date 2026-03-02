@@ -8,27 +8,58 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  clerkId   String    @unique
-  email     String    @unique
-  name      String?
-  captures  Capture[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id          String       @id @default(cuid())
+  clerkId     String       @unique
+  email       String       @unique
+  name        String?
+  captures    Capture[]
+  collections Collection[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Capture {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  imageUrl    String
-  description String?
-  tags        String[]  @default([])
-  analyzedAt  DateTime?
-  sourceApp   String?
-  sourceUrl   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl        String
+  description     String?
+  tags            String[]            @default([])
+  analyzedAt      DateTime?
+  sourceApp       String?
+  sourceUrl       String?
+  libraryPosition Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  collections     CollectionCapture[]
 
   @@index([userId])
+  @@index([userId, libraryPosition])
+}
+
+model Collection {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  color       String
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  captures    CollectionCapture[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([userId])
+}
+
+model CollectionCapture {
+  id           String     @id @default(cuid())
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  captureId    String
+  capture      Capture    @relation(fields: [captureId], references: [id], onDelete: Cascade)
+  position     Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  @@unique([collectionId, captureId])
+  @@index([collectionId, position])
 }

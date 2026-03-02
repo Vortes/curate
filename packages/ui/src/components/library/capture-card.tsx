@@ -1,6 +1,6 @@
 "use client"
 
-import { Bookmark, MoreHorizontal, Activity } from "lucide-react"
+import { Bookmark, MoreHorizontal, Activity, GripHorizontal } from "lucide-react"
 import { cn } from "../../lib/utils"
 
 export interface CaptureCardData {
@@ -24,6 +24,12 @@ interface CaptureCardProps {
 	isDeleting?: boolean
 	className?: string
 	style?: React.CSSProperties
+	// Organize mode props
+	isOrganizing?: boolean
+	isSelected?: boolean
+	onSelect?: (id: string) => void
+	// Drag-and-drop handle listeners (from useSortable)
+	dragListeners?: Record<string, unknown>
 }
 
 export function CaptureCard({
@@ -36,18 +42,37 @@ export function CaptureCard({
 	isDeleting,
 	className,
 	style,
+	isOrganizing = false,
+	isSelected = false,
+	onSelect,
+	dragListeners,
 }: CaptureCardProps) {
+	function handleClick() {
+		if (isOrganizing) {
+			onSelect?.(capture.id)
+		} else {
+			onClick?.(capture)
+		}
+	}
+
 	return (
 		<div
-			onClick={() => onClick?.(capture)}
+			onClick={handleClick}
 			className={cn(
 				"group relative overflow-hidden rounded-xl cursor-pointer transition-all duration-250",
 				"bg-surface-cool shadow-card-flow hover:shadow-[inset_0_2px_6px_rgba(0,0,0,0.07),inset_0_0_0_1px_rgba(0,0,0,0.04),0_1px_0_rgba(255,255,255,0.5)]",
 				isDeleting && "pointer-events-none opacity-40",
+				// Selection ring
+				isOrganizing && isSelected && "ring-2 ring-blue-500 ring-offset-2",
 				className,
 			)}
 			style={style}
 		>
+			{/* Selected background tint */}
+			{isOrganizing && isSelected && (
+				<div className="absolute inset-0 bg-blue-500/5 z-10 pointer-events-none rounded-xl" />
+			)}
+
 			{/* Image area inset within card padding */}
 			<div className="p-2.5">
 				<div className="relative w-full aspect-4/3 overflow-hidden rounded-lg transition-transform duration-250 group-hover:scale-[0.98]">
@@ -72,31 +97,42 @@ export function CaptureCard({
 						</div>
 					)}
 
-					{/* Hover action buttons */}
-					<div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-						{onBookmark && (
+					{/* Organize mode: grip handle (always visible), no hover actions */}
+					{isOrganizing ? (
+						<div
+							className="absolute top-2 right-2 cursor-grab active:cursor-grabbing touch-none"
+							{...(dragListeners as Record<string, React.EventHandler<React.SyntheticEvent>>)}
+							onClick={(e) => e.stopPropagation()}
+						>
+							<GripHorizontal className="w-5 h-5 text-white/70 drop-shadow-md" />
+						</div>
+					) : (
+						/* Normal mode: hover action buttons */
+						<div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+							{onBookmark && (
+								<button
+									onClick={(e) => {
+										e.stopPropagation()
+										onBookmark(capture.id)
+									}}
+									className="w-7 h-7 rounded-md border-0 bg-white/90 backdrop-blur-sm flex items-center justify-center cursor-pointer text-ink-mid transition-all duration-200 hover:bg-white hover:text-ink"
+									aria-label="Bookmark capture"
+								>
+									<Bookmark className="w-[13px] h-[13px]" />
+								</button>
+							)}
 							<button
 								onClick={(e) => {
 									e.stopPropagation()
-									onBookmark(capture.id)
+									onDelete?.(capture.id)
 								}}
 								className="w-7 h-7 rounded-md border-0 bg-white/90 backdrop-blur-sm flex items-center justify-center cursor-pointer text-ink-mid transition-all duration-200 hover:bg-white hover:text-ink"
-								aria-label="Bookmark capture"
+								aria-label="More actions"
 							>
-								<Bookmark className="w-[13px] h-[13px]" />
+								<MoreHorizontal className="w-[13px] h-[13px]" />
 							</button>
-						)}
-						<button
-							onClick={(e) => {
-								e.stopPropagation()
-								onDelete?.(capture.id)
-							}}
-							className="w-7 h-7 rounded-md border-0 bg-white/90 backdrop-blur-sm flex items-center justify-center cursor-pointer text-ink-mid transition-all duration-200 hover:bg-white hover:text-ink"
-							aria-label="More actions"
-						>
-							<MoreHorizontal className="w-[13px] h-[13px]" />
-						</button>
-					</div>
+						</div>
+					)}
 				</div>
 			</div>
 		</div>

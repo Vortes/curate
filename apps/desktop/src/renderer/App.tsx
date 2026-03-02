@@ -4,6 +4,12 @@ import { useCallback, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { TRPCProvider } from "./TRPCProvider";
 import { LibraryView } from "./LibraryView";
+import { CollectionView } from "./CollectionView";
+import { trpc } from "./trpc";
+
+type View =
+  | { type: "library" }
+  | { type: "collection"; id: string };
 
 function SignInScreen() {
   const { signIn } = useAuth();
@@ -47,20 +53,75 @@ function SignInScreen() {
 function AppContent() {
   const { signOut, isSigningOut } = useAuth();
   const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
+
+  const [view, setView] = useState<View>({ type: "library" });
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const handleSignOut = useCallback(async () => {
     queryClient.clear();
     await signOut();
   }, [signOut, queryClient]);
 
+  const { data: collectionsData, isLoading: isLoadingCollections } =
+    trpc.collection.list.useQuery();
+
+  const createCollection = trpc.collection.create.useMutation({
+    onSuccess: () => {
+      void utils.collection.list.invalidate();
+      setCreateError(null);
+    },
+    onError: (err) => {
+      setCreateError(err.message ?? "Failed to create collection");
+    },
+  });
+
+  const collections = (collectionsData ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    color: c.color,
+    captureCount: c._count.captures,
+    href: `/collections/${c.id}`,
+  }));
+
+  async function handleCreateCollection(name: string) {
+    setCreateError(null);
+    await createCollection.mutateAsync({ name });
+  }
+
+  // Derive activePath for sidebar highlighting
+  const activePath =
+    view.type === "collection" ? `/collections/${view.id}` : "/library";
+
+  function handleNavClick(href: string) {
+    if (href === "/library") {
+      setView({ type: "library" });
+    } else if (href.startsWith("/collections/")) {
+      const id = href.replace("/collections/", "");
+      setView({ type: "collection", id });
+    }
+  }
+
   return (
     <AppShell
-      activePath="/library"
+      activePath={activePath}
       platform="desktop"
       onSignOut={handleSignOut}
       isSigningOut={isSigningOut}
+      collections={collections}
+      isLoadingCollections={isLoadingCollections}
+      onCreateCollection={handleCreateCollection}
+      createError={createError}
+      onNavClick={handleNavClick}
     >
-      <LibraryView />
+      {view.type === "library" ? (
+        <LibraryView />
+      ) : (
+        <CollectionView
+          collectionId={view.id}
+          onBack={() => setView({ type: "library" })}
+        />
+      )}
     </AppShell>
   );
 }
