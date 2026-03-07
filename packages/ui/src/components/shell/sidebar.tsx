@@ -28,7 +28,7 @@ interface SidebarProps {
 }
 
 const navItems = [
-	{ label: "Library", icon: LayoutGrid, href: "/library", count: 247 },
+	{ label: "Library", icon: LayoutGrid, href: "/library" },
 ] as const
 
 export function Sidebar({

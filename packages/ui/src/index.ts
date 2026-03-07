@@ -36,3 +36,4 @@ export { CollectionHeader } from "./components/collections/collection-header";
 export { EditCollectionDialog } from "./components/collections/edit-collection-dialog";
 export { DeleteCollectionDialog } from "./components/collections/delete-collection-dialog";
 export { OrganizeModal, type CollectionForOrganize } from "./components/collections/organize-modal";
+export { DesignBriefModal } from "./components/collections/design-brief-modal";

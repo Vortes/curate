@@ -7,6 +7,7 @@ interface CollectionHeaderProps {
   name: string;
   description?: string | null;
   captureCount: number;
+  onGenerateBrief: () => void;
   onEdit: () => void;
   onOrganize: () => void;
   onDelete: () => void;
@@ -16,6 +17,7 @@ export function CollectionHeader({
   name,
   description,
   captureCount,
+  onGenerateBrief,
   onEdit,
   onOrganize,
   onDelete,
@@ -55,6 +57,15 @@ export function CollectionHeader({
 
           {dropdownOpen && (
             <div className="absolute right-0 top-full mt-1 z-50 bg-surface border border-edge rounded-lg shadow-lg py-1 min-w-[160px]">
+              <button
+                onClick={() => {
+                  setDropdownOpen(false);
+                  onGenerateBrief();
+                }}
+                className="w-full text-left px-3 py-2 text-[13px] text-ink cursor-pointer hover:bg-black/[0.03] transition-colors duration-100"
+              >
+                Generate design brief
+              </button>
               <button
                 onClick={() => {
                   setDropdownOpen(false);

@@ -11,6 +11,7 @@ import {
   CollectionHeader,
   EditCollectionDialog,
   DeleteCollectionDialog,
+  DesignBriefModal,
   OrganizeModeProvider,
   useOrganizeMode,
   FloatingActionBar,
@@ -129,9 +130,26 @@ function CollectionDetailContent() {
   const [selectedCapture, setSelectedCapture] = useState<CaptureCardData | null>(null)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showBriefModal, setShowBriefModal] = useState(false)
+  const [briefText, setBriefText] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const generateBrief = trpc.collection.generateBrief.useMutation({
+    onSuccess: (data) => {
+      setBriefText(data.brief)
+    },
+    onError: () => {
+      toast.error("Failed to generate design brief")
+    },
+  })
+
+  function handleGenerateBrief() {
+    setBriefText(null)
+    setShowBriefModal(true)
+    generateBrief.mutate({ collectionId: id })
+  }
 
   function handleOpenEdit() {
     setEditName(collection?.name ?? "")
@@ -217,6 +235,7 @@ function CollectionDetailContent() {
           name={collection.name}
           description={collection.description}
           captureCount={captures.length}
+          onGenerateBrief={handleGenerateBrief}
           onEdit={handleOpenEdit}
           onOrganize={enterOrganize}
           onDelete={() => setShowDeleteDialog(true)}
@@ -296,6 +315,14 @@ function CollectionDetailContent() {
         onClose={() => setShowDeleteDialog(false)}
         collectionName={collection.name}
         onConfirm={handleConfirmDelete}
+      />
+
+      <DesignBriefModal
+        open={showBriefModal}
+        onClose={() => setShowBriefModal(false)}
+        brief={briefText}
+        isLoading={generateBrief.isPending}
+        collectionName={collection.name}
       />
     </>
   )
