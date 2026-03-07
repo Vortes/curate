@@ -14,7 +14,7 @@ export const captureRouter = createTRPCRouter({
 
     return ctx.db.capture.findMany({
       where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
+      orderBy: { libraryPosition: "asc" },
     });
   }),
 
@@ -43,11 +43,17 @@ export const captureRouter = createTRPCRouter({
         where: { clerkId: ctx.userId },
       });
 
+      await ctx.db.capture.updateMany({
+        where: { userId: user.id },
+        data: { libraryPosition: { increment: 1 } },
+      });
+
       return ctx.db.capture.create({
         data: {
           userId: user.id,
           imageUrl: input.imageUrl,
           sourceUrl: input.sourceUrl,
+          libraryPosition: 0,
         },
       });
     }),
@@ -102,6 +108,26 @@ export const captureRouter = createTRPCRouter({
           analyzedAt: new Date(),
         },
       });
+
+      return { success: true };
+    }),
+
+  reorderLibrary: protectedProcedure
+    .input(z.object({ orderedCaptureIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.db.user.findUnique({
+        where: { clerkId: ctx.userId },
+      });
+      if (!user) return { success: false };
+
+      await ctx.db.$transaction(
+        input.orderedCaptureIds.map((id, index) =>
+          ctx.db.capture.updateMany({
+            where: { id, userId: user.id },
+            data: { libraryPosition: index },
+          })
+        )
+      );
 
       return { success: true };
     }),

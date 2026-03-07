@@ -1,46 +1,50 @@
-import { LayoutGrid, Activity, Globe, Settings, LogOut, Loader2 } from "lucide-react"
+"use client"
+
+import { useState } from "react"
+import { LayoutGrid, Settings, LogOut, Loader2, Plus } from "lucide-react"
 import { cn } from "../../lib/utils"
+import { NewCollectionModal } from "../collections/new-collection-modal"
 
 interface CollectionItem {
-	label: string
+	id: string
+	name: string
 	color: string
-	count: number
-	href?: string
+	captureCount: number
+	href: string
 }
 
 interface SidebarProps {
 	activePath?: string
 	className?: string
 	collections?: CollectionItem[]
+	isLoadingCollections?: boolean
+	onCreateCollection?: (name: string) => Promise<void>
+	createError?: string | null
 	platform?: "web" | "desktop"
 	onSignOut?: () => void | Promise<void>
 	isSigningOut?: boolean
+	/** When provided, nav/collection clicks call this instead of native anchor navigation (used by Electron) */
+	onNavClick?: (href: string) => void
 }
 
 const navItems = [
-	{ label: "Library", icon: LayoutGrid, href: "/library", count: 247 },
-	{ label: "Flows", icon: Activity, href: "/flows", count: 12 },
-	{ label: "Sources", icon: Globe, href: "/sources", count: 38 },
+	{ label: "Library", icon: LayoutGrid, href: "/library" },
 ] as const
-
-const defaultCollections: CollectionItem[] = [
-	{ label: "Onboarding patterns", color: "#6B8E6B", count: 34 },
-	{ label: "Navigation", color: "#7B8DAF", count: 21 },
-	{ label: "Data tables", color: "#C4956A", count: 18 },
-	{ label: "Settings pages", color: "#9B7BB5", count: 15 },
-	{ label: "Empty states", color: "#B5736B", count: 9 },
-]
 
 export function Sidebar({
 	activePath = "/",
 	className,
-	collections,
+	collections = [],
+	isLoadingCollections = false,
+	onCreateCollection,
+	createError,
 	platform = "web",
 	onSignOut,
 	isSigningOut = false,
+	onNavClick,
 }: SidebarProps) {
-	const collectionItems = collections ?? defaultCollections
 	const isDesktop = platform === "desktop"
+	const [isNewModalOpen, setIsNewModalOpen] = useState(false)
 
 	return (
 		<aside
@@ -54,9 +58,7 @@ export function Sidebar({
 			<div className="absolute right-0 top-0 bottom-0 w-px bg-transparent shadow-sculpted-v" />
 
 			{/* macOS traffic light clearance + drag region (desktop only) */}
-			{isDesktop && (
-				<div className="h-[52px] shrink-0 drag-region" />
-			)}
+			{isDesktop && <div className="h-[52px] shrink-0 drag-region" />}
 
 			{/* Brand area */}
 			<div className="px-6 mb-8 flex items-center gap-2">
@@ -73,7 +75,15 @@ export function Sidebar({
 					return (
 						<a
 							key={item.href}
-							href={item.href}
+							href={onNavClick ? undefined : item.href}
+							onClick={
+								onNavClick
+									? (e) => {
+											e.preventDefault()
+											onNavClick(item.href)
+										}
+									: undefined
+							}
 							className={cn(
 								"flex items-center gap-2.5 px-6 py-2 text-[13.5px] font-normal cursor-pointer transition-all duration-200 relative",
 								isActive
@@ -104,37 +114,89 @@ export function Sidebar({
 
 			{/* Collections section */}
 			<div className="flex-1 overflow-y-auto">
-				<div className="font-mono text-[10px] font-normal uppercase tracking-[0.1em] text-ink-whisper px-6 mb-2">
-					Collections
-				</div>
-				{collectionItems.map((item, index) => {
-					const href = item.href ?? "#"
-					const isActive = item.href ? activePath === item.href : false
-					return (
-						<a
-							key={index}
-							href={href}
-							className={cn(
-								"flex items-center gap-2.5 px-6 py-2 text-[13.5px] font-normal cursor-pointer transition-all duration-200 relative",
-								isActive
-									? "text-ink"
-									: "text-ink-quiet hover:text-ink-mid hover:bg-black/[0.02]",
-							)}
+				<div className="flex items-center justify-between px-6 mb-2">
+					<div className="font-mono text-[10px] font-normal uppercase tracking-[0.1em] text-ink-whisper">
+						Collections
+					</div>
+					{onCreateCollection && (
+						<button
+							onClick={() => setIsNewModalOpen(true)}
+							className="text-ink-quiet text-[10px] hover:text-ink flex items-center gap-1 font-medium transition-colors cursor-pointer"
 						>
-							{isActive && (
-								<span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-orange rounded-r" />
-							)}
-							<span
-								className="w-2 h-2 rounded-full shrink-0"
-								style={{ background: item.color }}
+							<Plus className="w-3 h-3" />
+							New
+						</button>
+					)}
+				</div>
+
+				{isLoadingCollections ? (
+					// Skeleton rows
+					<div className="flex flex-col gap-1 px-6">
+						{[0, 1, 2].map((i) => (
+							<div
+								key={i}
+								className="h-9 rounded animate-pulse bg-black/[0.04]"
 							/>
-							{item.label}
-							<span className="ml-auto font-mono text-[11px] text-ink-whisper font-light">
-								{item.count}
-							</span>
-						</a>
-					)
-				})}
+						))}
+					</div>
+				) : collections.length === 0 ? (
+					<div className="px-6 py-1.5 text-ink-whisper text-[12px]">
+						No collections
+					</div>
+				) : (
+					collections.map((item) => {
+						const isActive = activePath === item.href
+						return (
+							<a
+								key={item.id}
+								href={onNavClick ? undefined : item.href}
+								onClick={
+									onNavClick
+										? (e) => {
+												e.preventDefault()
+												onNavClick(item.href)
+											}
+										: undefined
+								}
+								title={item.name}
+								className={cn(
+									"flex items-center gap-2.5 px-6 py-2 text-[13.5px] font-normal cursor-pointer transition-all duration-200 relative",
+									isActive
+										? "text-ink"
+										: "text-ink-quiet hover:text-ink-mid hover:bg-black/[0.02]",
+								)}
+							>
+								{isActive && (
+									<span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-orange rounded-r" />
+								)}
+								<span
+									className="w-2 h-2 rounded-full shrink-0"
+									style={{ background: item.color }}
+								/>
+								<span className="truncate">{item.name}</span>
+								<span className="ml-auto font-mono text-[11px] text-ink-whisper font-light shrink-0">
+									{item.captureCount}
+								</span>
+							</a>
+						)
+					})
+				)}
+
+				{/* New Collection Modal */}
+				{onCreateCollection && (
+					<NewCollectionModal
+						open={isNewModalOpen}
+						onClose={() => setIsNewModalOpen(false)}
+						onCreate={async (name) => {
+							try {
+								await onCreateCollection(name)
+								setIsNewModalOpen(false)
+							} catch {
+								// Keep open on error
+							}
+						}}
+					/>
+				)}
 			</div>
 
 			{/* Footer */}
